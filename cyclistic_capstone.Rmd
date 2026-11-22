@@ -1,0 +1,126 @@
+---
+title: "Cyclistic Bike-Share Analysis: Converting Casual Riders into Annual Members"
+author: "Data Analytics Capstone"
+date: "November 2026"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(tidyverse)
+
+# Load the pre-aggregated trailing 12-month summary tables (Nov 2025 – Oct 2026)
+summary_by_user <- read_csv("summary_by_user.csv")
+summary_by_day <- read_csv("summary_by_day.csv") %>%
+  mutate(day_of_week = factor(day_of_week, levels = c(
+    "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
+  )))
+summary_by_month <- read_csv("summary_by_month.csv") %>%
+  mutate(month = factor(month, levels = month.name))
+```
+
+## 1. Ask: Business Task & Executive Summary
+Cyclistic's marketing team wants to maximize the number of annual memberships by converting existing casual riders (single-ride and full-day pass users) into annual subscribers. An analysis of **6.13 million valid rides** from November 2025 through October 2026 reveals clear behavioral differences between the two groups:
+
+* **Ridership Share:** Annual members account for **64.7%** of total rides (3,967,675 trips), while casual riders account for **35.3%** (2,161,947 trips).
+* **Trip Duration:** Casual riders average **18.0 minutes per ride**—nearly **50% longer** than annual members (**12.1 minutes**).
+* **Usage Patterns:** Members ride consistently on weekdays for commuting, whereas casual riders surge on weekends and during warm summer months for leisure.
+
+---
+
+## 2. Prepare: Data Sources & Limitations
+* **Data Source:** Public historical trip data provided by Motivate International Inc. (Divvy bike-share in Chicago) under the official data license agreement, covering the trailing 12 months from November 2025 through October 2026 (`202511` to `202610`).
+* **Data Limitations:** Personally identifiable information (PII) such as rider IDs and credit card details is stripped for privacy, preventing tracking of individual repeat casual riders across multiple trips.
+
+---
+
+## 3. Process: Data Cleaning & Manipulation
+Using R (`tidyverse` and `lubridate`), all 12 monthly datasets were standardized and filtered to remove test/maintenance trips under 1 minute, extreme outliers exceeding 24 hours (1,440 minutes), and null classifications—resulting in **6,129,622 valid rides**. Derived metrics included `ride_length_mins`, `day_of_week`, and `month`.
+
+```{r summary-table}
+summary_by_user %>%
+  mutate(
+    share_pct = round(total_rides / sum(total_rides) * 100, 1),
+    total_rides = scales::comma(total_rides),
+    avg_duration = round(avg_duration, 1)
+  ) %>%
+  select(
+    `Rider Type` = member_casual,
+    `Total Rides` = total_rides,
+    `Share (%)` = share_pct,
+    `Avg Duration (Mins)` = avg_duration
+  ) %>%
+  knitr::kable()
+```
+
+---
+
+## 4. Analyze: Summary of Analysis
+Across the 12-month period, annual members generated **64.7% of total ride volume** (3,967,675 trips) while casual riders generated **35.3%** (2,161,947 trips). Despite taking fewer trips overall, casual riders averaged **18.0 minutes per ride** compared to **12.1 minutes** for annual members—nearly 50% longer per trip. Behavioral segmentation by day of week and month confirms two distinct user profiles: annual members rely on the service for consistent weekday commuting, whereas casual riders primarily use bikes for longer leisure trips on weekends and during peak summer weather.
+
+---
+
+## 5. Share: Supporting Visualizations & Key Findings
+
+### A. Weekly Ridership Volume: Commuters vs. Weekend Leisure
+Annual members peak Tuesday through Thursday, reflecting routine work commutes. Casual riders show the exact opposite pattern, peaking sharply on Saturdays and Sundays.
+
+```{r plot-day-volume, fig.width=9, fig.height=4.5}
+ggplot(summary_by_day, aes(x = day_of_week, y = total_rides / 1000, fill = member_casual)) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "Total Rides by Day of Week: Members vs. Casual Riders",
+    subtitle = "Trailing 12 Months (Nov 2025 – Oct 2026)",
+    x = NULL,
+    y = "Total Rides (Thousands)",
+    fill = "Rider Type"
+  ) +
+  theme_minimal()
+```
+
+### B. Average Ride Duration by Day of Week
+Across every single day of the week, casual riders take significantly longer trips than annual members, peaking on weekends.
+
+```{r plot-day-duration, fig.width=9, fig.height=4.5}
+ggplot(summary_by_day, aes(x = day_of_week, y = avg_duration, fill = member_casual)) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "Average Ride Duration (Minutes) by Day of Week",
+    subtitle = "Casual riders average ~50% longer trips across the entire week",
+    x = NULL,
+    y = "Average Duration (Minutes)",
+    fill = "Rider Type"
+  ) +
+  theme_minimal()
+```
+
+### C. Monthly Seasonality Trends
+While annual members maintain steady baseline ridership year-round, casual ridership is highly seasonal—climbing sharply from May through September before dropping in winter.
+
+```{r plot-monthly-trend, fig.width=9, fig.height=4.5}
+ggplot(summary_by_month, aes(x = month, y = total_rides / 1000, group = member_casual, color = member_casual)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 2.5) +
+  labs(
+    title = "Monthly Ridership Trend: Members vs. Casual Riders",
+    subtitle = "Casual demand surges during peak summer months",
+    x = NULL,
+    y = "Total Rides (Thousands)",
+    color = "Rider Type"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+---
+
+## 6. Act: Top 3 Strategic Recommendations
+1. **Introduce a Seasonal / Weekend Leisure Pass**
+   * **Target & Tactic:** Launch a lower-barrier "Summer Pass" (May–September) or "Weekend Warrior" subscription tier tailored to recreational riders who peak on Saturdays and Sundays.
+   * **Expected Impact:** Captures high-volume summer and weekend casual demand while creating an easy upsell path to full annual membership.
+2. **Trigger Automated Post-Ride Cost-Savings Prompts**
+   * **Target & Tactic:** Deploy in-app push notifications immediately after a casual rider completes a trip exceeding 15 minutes (below their 18.0-minute average) or takes a second ride within 7 days, displaying exact dollar savings under an annual plan.
+   * **Expected Impact:** Converts high-frequency or long-duration casual riders at the exact moment they experience the highest single-ride pricing friction.
+3. **Target Weekday Casual Commuters with a 7-Day Free Trial**
+   * **Target & Tactic:** Segment casual riders unlocking bikes during peak weekday commute windows (7–9 AM and 4–6 PM) and offer a frictionless 7-day free trial of annual membership perks.
+   * **Expected Impact:** Directly converts existing weekday commuters into recurring annual subscribers by letting them experience unlimited commuter unlocks risk-free.
